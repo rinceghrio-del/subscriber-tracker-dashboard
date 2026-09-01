@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rustech Subscriber Tracker — Admin</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- LOGIN VIEW -->
+  <section id="loginView" class="screen">
+    <div class="login-card">
+      <h1 class="brand">Subscriber Tracker</h1>
+      <p class="brand-sub">Admin dashboard</p>
+
+      <label>Email
+        <input type="email" id="loginEmail" autocomplete="username" />
+      </label>
+      <label>Password
+        <input type="password" id="loginPassword" autocomplete="current-password" />
+      </label>
+
+      <button id="btnLogin" class="btn btn-primary">Log in</button>
+      <p id="loginError" class="error-text" hidden></p>
+    </div>
+  </section>
+
+  <!-- DASHBOARD VIEW -->
+  <section id="dashboardView" class="screen" hidden>
+    <header class="topbar">
+      <div>
+        <h1 class="brand">Subscriber Tracker</h1>
+        <p class="brand-sub" id="adminEmailLabel"></p>
+      </div>
+      <button id="btnLogout" class="btn btn-ghost">Log out</button>
+    </header>
+
+    <div class="summary-row">
+      <div class="summary-card">
+        <span class="summary-num" id="statOverdue">0</span>
+        <span class="summary-label">Overdue</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-num" id="statDueSoon">0</span>
+        <span class="summary-label">Due within 3 days</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-num" id="statActive">0</span>
+        <span class="summary-label">Active</span>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="searchBox" placeholder="Search by name or email…" />
+      <button id="btnAddSubscriber" class="btn btn-primary">+ Add subscriber</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="subscriberTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Due date</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="subscriberTableBody">
+          <!-- rows injected by app.js -->
+        </tbody>
+      </table>
+      <p id="emptyState" class="empty-state" hidden>No subscribers yet. Click "Add subscriber" to create one.</p>
+    </div>
+  </section>
+
+  <!-- ADD / EDIT SUBSCRIBER MODAL -->
+  <div id="subscriberModal" class="modal-overlay" hidden>
+    <div class="modal">
+      <h2 id="modalTitle">Add subscriber</h2>
+
+      <label>Full name
+        <input type="text" id="fieldName" />
+      </label>
+      <label>Email <span class="hint">(this becomes their login + document ID — lowercase)</span>
+        <input type="email" id="fieldEmail" />
+      </label>
+      <label>Due date
+        <input type="date" id="fieldDueDate" />
+      </label>
+      <label>Monthly amount (₱)
+        <input type="number" id="fieldAmount" min="0" step="0.01" />
+      </label>
+      <label>Status
+        <select id="fieldStatus">
+          <option value="active">Active</option>
+          <option value="overdue">Overdue</option>
+          <option value="paid">Paid</option>
+        </select>
+      </label>
+
+      <div class="modal-actions">
+        <button id="btnDeleteSubscriber" class="btn btn-danger" hidden>Delete</button>
+        <div class="modal-actions-right">
+          <button id="btnCancelModal" class="btn btn-ghost">Cancel</button>
+          <button id="btnSaveSubscriber" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+      <p id="modalError" class="error-text" hidden></p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

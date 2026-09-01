@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // IMPORTANT: update this list to match ADMIN_EMAILS in firebase-config.js.
+    // Only these accounts can create/edit/delete subscriber records.
+    function isAdmin() {
+      return request.auth != null &&
+        request.auth.token.email in [
+          "rustyminge784@gmail.com"
+        ];
+    }
+
+    // Each subscriber doc is keyed by their lowercase email.
+    // - A logged-in subscriber can only READ their own record (Android app).
+    // - Only the admin account(s) above can WRITE (create/edit/delete) records
+    //   (PC dashboard).
+    match /subscribers/{email} {
+      allow read: if request.auth != null && request.auth.token.email == email;
+      allow read, write: if isAdmin();
+    }
+  }
+}
