@@ -27,6 +27,9 @@ const btnAddSubscriber = document.getElementById("btnAddSubscriber");
 const tableBody = document.getElementById("subscriberTableBody");
 const emptyState = document.getElementById("emptyState");
 
+const pendingSection = document.getElementById("pendingSection");
+const pendingList = document.getElementById("pendingList");
+
 const statOverdue = document.getElementById("statOverdue");
 const statDueSoon = document.getElementById("statDueSoon");
 const statActive = document.getElementById("statActive");
@@ -48,6 +51,8 @@ const toastEl = document.getElementById("toast");
 let allSubscribers = []; // cached for search filtering
 let editingDocId = null; // null = adding new
 let unsubscribeSnapshot = null;
+let unsubscribePending = null;
+let pendingPrefillEmail = null; // set when confirming a pending registration
 
 // ---------- Auth ----------
 btnLogin.addEventListener("click", handleLogin);
@@ -76,6 +81,7 @@ onAuthStateChanged(auth, (user) => {
     adminEmailLabel.textContent = user.email;
     showDashboard();
     subscribeToSubscribers();
+    subscribeToPendingRegistrations();
   } else {
     if (user) {
       // Logged in, but not an authorized admin email
@@ -84,6 +90,7 @@ onAuthStateChanged(auth, (user) => {
     }
     showLogin();
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    if (unsubscribePending) { unsubscribePending(); unsubscribePending = null; }
   }
 });
 
@@ -201,6 +208,64 @@ function renderTable() {
 
 searchBox.addEventListener("input", renderTable);
 
+// ---------- Pending registrations ----------
+function subscribeToPendingRegistrations() {
+  unsubscribePending = onSnapshot(collection(db, "pendingRegistrations"), (snapshot) => {
+    const pending = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderPending(pending);
+  }, (err) => {
+    showToast("Failed to load pending registrations: " + err.message);
+  });
+}
+
+function renderPending(pending) {
+  pendingSection.hidden = pending.length === 0;
+  pendingList.innerHTML = "";
+
+  pending
+    .sort((a, b) => (b.registeredAt?.toMillis() || 0) - (a.registeredAt?.toMillis() || 0))
+    .forEach((p) => {
+      const card = document.createElement("div");
+      card.className = "pending-card";
+
+      const dateText = p.registeredAt
+        ? p.registeredAt.toDate().toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" })
+        : "";
+
+      card.innerHTML = `
+        <div class="pending-info">
+          <span class="pending-email">${escapeHtml(p.email || p.id)}</span>
+          <span class="pending-date">Registered ${dateText}</span>
+        </div>
+        <div class="pending-actions">
+          <button class="btn btn-primary btn-sm" data-action="confirm">Confirm</button>
+          <button class="btn btn-danger btn-sm" data-action="dismiss">Dismiss</button>
+        </div>
+      `;
+
+      card.querySelector('[data-action="confirm"]').addEventListener("click", () => openConfirmModal(p));
+      card.querySelector('[data-action="dismiss"]').addEventListener("click", () => dismissPending(p));
+
+      pendingList.appendChild(card);
+    });
+}
+
+function openConfirmModal(pending) {
+  pendingPrefillEmail = pending.id;
+  openAddModal();
+  fieldEmail.value = pending.email || pending.id;
+}
+
+async function dismissPending(pending) {
+  if (!confirm(`Dismiss registration for "${pending.email || pending.id}"? They'll still be able to log in, but won't appear here anymore unless they register again.`)) return;
+  try {
+    await deleteDoc(doc(db, "pendingRegistrations", pending.id));
+    showToast("Dismissed.");
+  } catch (err) {
+    showToast("Failed to dismiss: " + err.message);
+  }
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
@@ -213,6 +278,7 @@ btnCancelModal.addEventListener("click", closeModal);
 
 function openAddModal() {
   editingDocId = null;
+  pendingPrefillEmail = null;
   modalTitle.textContent = "Add subscriber";
   fieldName.value = "";
   fieldEmail.value = "";
@@ -227,6 +293,7 @@ function openAddModal() {
 
 function openEditModal(subscriber) {
   editingDocId = subscriber.id;
+  pendingPrefillEmail = null;
   modalTitle.textContent = "Edit subscriber";
   fieldName.value = subscriber.name || "";
   fieldEmail.value = subscriber.email || subscriber.id;
@@ -273,6 +340,10 @@ btnSaveSubscriber.addEventListener("click", async () => {
   btnSaveSubscriber.disabled = true;
   try {
     await setDoc(doc(db, "subscribers", docId), data);
+    if (pendingPrefillEmail) {
+      await deleteDoc(doc(db, "pendingRegistrations", pendingPrefillEmail)).catch(() => {});
+      pendingPrefillEmail = null;
+    }
     closeModal();
     showToast("Saved.");
   } catch (err) {
