@@ -111,6 +111,33 @@ input:focus, select:focus {
   flex-wrap: wrap;
 }
 
+/* ---------- Pending registrations ---------- */
+#pendingSection { padding: 20px 28px 4px 28px; }
+
+.section-title { margin: 0 0 4px 0; font-size: 16px; }
+.section-sub { margin: 0 0 14px 0; color: var(--text-dim); font-size: 13px; }
+
+.pending-list { display: flex; flex-direction: column; gap: 10px; }
+
+.pending-card {
+  background: var(--surface);
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pending-info { display: flex; flex-direction: column; gap: 2px; }
+.pending-email { font-weight: 600; font-size: 14px; }
+.pending-date { color: var(--text-dim); font-size: 12px; }
+
+.pending-actions { display: flex; gap: 8px; }
+.btn-sm { padding: 8px 14px; font-size: 13px; }
+
 .summary-card {
   background: var(--surface);
   border-radius: 12px;
