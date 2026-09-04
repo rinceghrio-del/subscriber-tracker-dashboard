@@ -194,6 +194,14 @@ tbody tr:last-child td { border-bottom: none; }
 .badge-overdue { background: rgba(255,82,82,0.15); color: var(--danger); }
 .badge-paid { background: rgba(154,160,166,0.15); color: var(--text-dim); }
 .badge-due-soon { background: rgba(255,179,0,0.15); color: var(--warn); }
+.badge-scheduled { background: rgba(26,111,232,0.18); color: #5b9cf6; }
+.badge-completed { background: rgba(0,230,118,0.15); color: var(--accent); }
+.badge-cancelled { background: rgba(154,160,166,0.15); color: var(--text-dim); }
+
+.repair-card { align-items: flex-start; }
+.repair-issue { color: var(--text); font-size: 14px; margin: 4px 0 0 0; max-width: 480px; }
+.repair-schedule-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.repair-schedule-row input[type="datetime-local"] { padding: 8px 10px; font-size: 13px; }
 
 .row-overdue td:first-child { border-left: 3px solid var(--danger); }
 .row-due-soon td:first-child { border-left: 3px solid var(--warn); }
