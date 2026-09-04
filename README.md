@@ -44,6 +44,11 @@ just handy if you want to check it from any device with a link.
 ## Using it
 
 - **Log in** with the admin account you created in step 2 above.
+- **Pending registrations**: anyone who registers in the Android app (but doesn't have a
+  subscription record yet) shows up here automatically. Click **Confirm** to open the Add
+  subscriber form pre-filled with their email — fill in the rest and Save. Click **Dismiss** to
+  remove them from this list without creating a record (they can still log in, they'll just see
+  "no record found" until/unless you confirm them later).
 - **Add subscriber**: name, email (becomes their login + record ID — must match exactly what
   they'll register with in the Android app), due date, monthly amount, status.
 - Rows with a **red left border** are overdue; **yellow** means due within 3 days.
@@ -55,6 +60,11 @@ just handy if you want to check it from any device with a link.
 
 ## Known limitations (fine for v1)
 
+- **Dismiss only removes the Firestore record** — it does not delete the person's login (Firebase
+  Authentication) account. They can still log in; they'll just see "no record found." To fully
+  remove their ability to log in, delete them manually in Firebase Console → Authentication →
+  Users. (Doing this automatically from the dashboard would need a Cloud Function + Blaze plan —
+  let Claude know if you want that added later.)
 - Notifications only fire while the dashboard tab is open in your browser — there's no
   server-side push yet. If you want reminders even when the dashboard isn't open, that would need
   a scheduled Cloud Function (Blaze/paid plan) — let Claude know if you want that added later.
