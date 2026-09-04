@@ -5,7 +5,7 @@ import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, Timestamp
+  getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
@@ -30,6 +30,9 @@ const emptyState = document.getElementById("emptyState");
 const pendingSection = document.getElementById("pendingSection");
 const pendingList = document.getElementById("pendingList");
 
+const repairSection = document.getElementById("repairSection");
+const repairList = document.getElementById("repairList");
+
 const statOverdue = document.getElementById("statOverdue");
 const statDueSoon = document.getElementById("statDueSoon");
 const statActive = document.getElementById("statActive");
@@ -52,6 +55,7 @@ let allSubscribers = []; // cached for search filtering
 let editingDocId = null; // null = adding new
 let unsubscribeSnapshot = null;
 let unsubscribePending = null;
+let unsubscribeRepairs = null;
 let pendingPrefillEmail = null; // set when confirming a pending registration
 
 // ---------- Auth ----------
@@ -82,6 +86,7 @@ onAuthStateChanged(auth, (user) => {
     showDashboard();
     subscribeToSubscribers();
     subscribeToPendingRegistrations();
+    subscribeToRepairRequests();
   } else {
     if (user) {
       // Logged in, but not an authorized admin email
@@ -91,6 +96,7 @@ onAuthStateChanged(auth, (user) => {
     showLogin();
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     if (unsubscribePending) { unsubscribePending(); unsubscribePending = null; }
+    if (unsubscribeRepairs) { unsubscribeRepairs(); unsubscribeRepairs = null; }
   }
 });
 
@@ -263,6 +269,105 @@ async function dismissPending(pending) {
     showToast("Dismissed.");
   } catch (err) {
     showToast("Failed to dismiss: " + err.message);
+  }
+}
+
+// ---------- Repair requests ----------
+function subscribeToRepairRequests() {
+  unsubscribeRepairs = onSnapshot(collection(db, "repairRequests"), (snapshot) => {
+    const repairs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderRepairs(repairs);
+  }, (err) => {
+    showToast("Failed to load repair requests: " + err.message);
+  });
+}
+
+function renderRepairs(repairs) {
+  // Only show active ones (pending/scheduled) by default; completed/cancelled
+  // stay in Firestore for history but don't clutter the dashboard.
+  const active = repairs.filter((r) => r.status === "pending" || r.status === "scheduled");
+  repairSection.hidden = active.length === 0;
+  repairList.innerHTML = "";
+
+  active
+    .sort((a, b) => (a.requestedAt?.toMillis() || 0) - (b.requestedAt?.toMillis() || 0))
+    .forEach((r) => {
+      const card = document.createElement("div");
+      card.className = "pending-card repair-card";
+      card.style.borderColor = r.status === "scheduled" ? "#5b9cf6" : "var(--warn)";
+
+      const requestedText = r.requestedAt
+        ? r.requestedAt.toDate().toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" })
+        : "";
+
+      const badgeClass = r.status === "scheduled" ? "badge-scheduled" : "badge-due-soon";
+      const badgeText = r.status === "scheduled" ? "Scheduled" : "Pending";
+
+      const scheduledInputValue = r.scheduledDate ? toDateTimeLocalValue(r.scheduledDate.toDate()) : "";
+      const scheduledDisplay = r.scheduledDate
+        ? r.scheduledDate.toDate().toLocaleString(undefined, { year: "numeric", month: "short", day: "2-digit", hour: "numeric", minute: "2-digit" })
+        : "";
+
+      card.innerHTML = `
+        <div class="pending-info">
+          <span class="pending-email">${escapeHtml(r.email || "")} <span class="badge ${badgeClass}">${badgeText}</span></span>
+          <span class="pending-date">Requested ${requestedText}</span>
+          <p class="repair-issue">${escapeHtml(r.issue || "")}</p>
+          ${r.status === "scheduled" ? `<span class="pending-date">Scheduled: ${scheduledDisplay}</span>` : ""}
+        </div>
+        <div class="pending-actions" style="flex-direction: column; align-items: stretch;">
+          <div class="repair-schedule-row">
+            <input type="datetime-local" class="repair-datetime" value="${scheduledInputValue}" />
+            <button class="btn btn-primary btn-sm" data-action="schedule">${r.status === "scheduled" ? "Reschedule" : "Schedule"}</button>
+          </div>
+          <div class="repair-schedule-row">
+            ${r.status === "scheduled" ? '<button class="btn btn-ghost btn-sm" data-action="complete">Mark Completed</button>' : ""}
+            <button class="btn btn-danger btn-sm" data-action="cancel">Cancel Request</button>
+          </div>
+        </div>
+      `;
+
+      card.querySelector('[data-action="schedule"]').addEventListener("click", () => {
+        const val = card.querySelector(".repair-datetime").value;
+        if (!val) { showToast("Pick a date/time first."); return; }
+        scheduleRepair(r.id, val);
+      });
+
+      const completeBtn = card.querySelector('[data-action="complete"]');
+      if (completeBtn) completeBtn.addEventListener("click", () => setRepairStatus(r.id, "completed"));
+
+      card.querySelector('[data-action="cancel"]').addEventListener("click", () => {
+        if (!confirm("Cancel this repair request?")) return;
+        setRepairStatus(r.id, "cancelled");
+      });
+
+      repairList.appendChild(card);
+    });
+}
+
+function toDateTimeLocalValue(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+async function scheduleRepair(id, dateTimeLocalValue) {
+  try {
+    await updateDoc(doc(db, "repairRequests", id), {
+      status: "scheduled",
+      scheduledDate: Timestamp.fromDate(new Date(dateTimeLocalValue))
+    });
+    showToast("Repair scheduled.");
+  } catch (err) {
+    showToast("Failed to schedule: " + err.message);
+  }
+}
+
+async function setRepairStatus(id, status) {
+  try {
+    await updateDoc(doc(db, "repairRequests", id), { status });
+    showToast(status === "completed" ? "Marked completed." : "Request cancelled.");
+  } catch (err) {
+    showToast("Failed to update: " + err.message);
   }
 }
 
