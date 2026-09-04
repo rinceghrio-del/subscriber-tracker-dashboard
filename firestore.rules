@@ -19,5 +19,28 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.token.email == email;
       allow read, write: if isAdmin();
     }
+
+    // Created automatically by the Android app right after someone registers.
+    // - The subscriber who owns this email can create/read/delete their own entry
+    //   (the app writes it once at registration time; nothing else touches it).
+    // - The admin dashboard reads all of these to show a "pending registrations"
+    //   queue, and can confirm (which deletes it + creates a subscribers doc) or
+    //   dismiss (which just deletes it) any entry.
+    match /pendingRegistrations/{email} {
+      allow create, read, delete: if request.auth != null && request.auth.token.email == email;
+      allow read, write: if isAdmin();
+    }
+
+    // Auto-ID documents. A subscriber can create a request for themselves and
+    // read/list only their own (query filters by email == their token email).
+    // Only the admin can update (schedule/complete/cancel) or delete requests —
+    // subscribers can't edit status or scheduledDate once submitted.
+    match /repairRequests/{requestId} {
+      allow create: if request.auth != null &&
+        request.resource.data.email == request.auth.token.email;
+      allow read: if request.auth != null &&
+        (resource.data.email == request.auth.token.email || isAdmin());
+      allow update, delete: if isAdmin();
+    }
   }
 }
