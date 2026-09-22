@@ -188,7 +188,7 @@ function updateSummary() {
 
   const now = new Date();
   const delayedCount = [...allInstalls, ...allRepairs].filter(
-    item => item.status === "scheduled" && item.scheduledDate && item.scheduledDate.toDate() < now
+    item => item.status === "delayed" || (item.status === "scheduled" && item.scheduledDate && item.scheduledDate.toDate() < now)
   ).length;
   statDelayed.textContent = delayedCount;
 
@@ -217,7 +217,10 @@ function buildCard(item, { showActions = true, showTypeTag = false } = {}) {
     : item.status === "cancelled" ? "badge-cancelled"
     : "badge-due-soon";
 
-  const isDelayed = item.status === "scheduled" && item.scheduledDate && item.scheduledDate.toDate() < new Date();
+  // "Delayed" happens two ways now: the technician marked it delayed in the
+  // Android app, or it's still "scheduled" but the date has already passed.
+  const isOverdueScheduled = item.status === "scheduled" && item.scheduledDate && item.scheduledDate.toDate() < new Date();
+  const isDelayed = item.status === "delayed" || isOverdueScheduled;
   const finalBadgeClass = isDelayed ? "badge-overdue" : badgeClass;
   const badgeText = isDelayed ? "Delayed" : (item.status === "pending" ? "Pending" : capitalize(item.status));
 
@@ -236,22 +239,28 @@ function buildCard(item, { showActions = true, showTypeTag = false } = {}) {
   card.style.borderColor = borderColor;
 
   const typeTag = showTypeTag ? `<span class="type-tag">${item.type}</span>` : "";
+  const canComplete = item.status === "scheduled" || item.status === "delayed";
 
   card.innerHTML = `
     <div class="pending-info">
       <span class="pending-email">${typeTag}${escapeHtml(contactLabel(item))} <span class="badge ${finalBadgeClass}">${badgeText}</span></span>
       <span class="pending-date">Requested ${requestedText}</span>
       <p class="repair-issue">${escapeHtml(detailLabel(item))}</p>
-      ${item.status === "scheduled" || item.status === "completed" ? (scheduledDisplay ? `<span class="pending-date">Scheduled: ${scheduledDisplay}</span>` : "") : ""}
+      ${scheduledDisplay ? `<span class="pending-date">Scheduled: ${scheduledDisplay}</span>` : ""}
+      ${item.assignedTo ? `<span class="pending-date">Technician: ${escapeHtml(item.assignedTo)}</span>` : ""}
+      ${item.status === "delayed" && item.delayReason ? `<span class="pending-date">Delay reason: ${escapeHtml(item.delayReason)}</span>` : ""}
     </div>
     ${showActions ? `
     <div class="pending-actions" style="flex-direction: column; align-items: stretch;">
       <div class="repair-schedule-row">
         <input type="datetime-local" class="item-datetime" value="${scheduledInputValue}" />
-        <button class="btn btn-primary btn-sm" data-action="schedule">${item.status === "scheduled" ? "Reschedule" : "Schedule"}</button>
       </div>
       <div class="repair-schedule-row">
-        ${item.status === "scheduled" ? (
+        <input type="email" class="item-assignee" placeholder="Technician email" value="${item.assignedTo ? escapeHtml(item.assignedTo) : ""}" />
+        <button class="btn btn-primary btn-sm" data-action="schedule">${item.status === "scheduled" || item.status === "delayed" ? "Reschedule / Reassign" : "Schedule"}</button>
+      </div>
+      <div class="repair-schedule-row">
+        ${canComplete ? (
           item.type === "install"
             ? '<button class="btn btn-ghost btn-sm" data-action="convert">Complete &amp; Add as Subscriber</button>'
             : '<button class="btn btn-ghost btn-sm" data-action="complete">Mark Completed</button>'
@@ -264,8 +273,9 @@ function buildCard(item, { showActions = true, showTypeTag = false } = {}) {
   if (showActions) {
     card.querySelector('[data-action="schedule"]').addEventListener("click", () => {
       const val = card.querySelector(".item-datetime").value;
+      const assignee = card.querySelector(".item-assignee").value.trim().toLowerCase();
       if (!val) { showToast("Pick a date/time first."); return; }
-      scheduleItem(item.type, item.id, val);
+      scheduleItem(item.type, item.id, val, assignee);
     });
     const completeBtn = card.querySelector('[data-action="complete"]');
     if (completeBtn) completeBtn.addEventListener("click", () => setItemStatus(item.type, item.id, "completed"));
@@ -291,13 +301,17 @@ function collectionNameFor(type) {
   return type === "install" ? "installRequests" : "repairRequests";
 }
 
-async function scheduleItem(type, id, dateTimeLocalValue) {
+async function scheduleItem(type, id, dateTimeLocalValue, assigneeEmail) {
   try {
-    await updateDoc(doc(db, collectionNameFor(type), id), {
+    const data = {
       status: "scheduled",
       scheduledDate: Timestamp.fromDate(new Date(dateTimeLocalValue))
-    });
-    showToast("Scheduled.");
+    };
+    // Only touch assignedTo if the admin actually typed something — leaves
+    // an existing assignment alone if the field was left blank.
+    if (assigneeEmail) data.assignedTo = assigneeEmail;
+    await updateDoc(doc(db, collectionNameFor(type), id), data);
+    showToast(assigneeEmail ? "Scheduled and assigned to " + assigneeEmail + "." : "Scheduled.");
   } catch (err) {
     showToast("Failed to schedule: " + err.message);
   }
@@ -344,7 +358,7 @@ repairSearchBox.addEventListener("input", renderRepairTab);
 function renderDelayedTab() {
   const now = new Date();
   const delayed = [...allInstalls, ...allRepairs]
-    .filter(item => item.status === "scheduled" && item.scheduledDate && item.scheduledDate.toDate() < now)
+    .filter(item => item.status === "delayed" || (item.status === "scheduled" && item.scheduledDate && item.scheduledDate.toDate() < now))
     .sort((a, b) => (a.scheduledDate?.toMillis() || 0) - (b.scheduledDate?.toMillis() || 0)); // most overdue first
 
   delayedList.innerHTML = "";
