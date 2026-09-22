@@ -5,7 +5,7 @@ import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, collection, doc, addDoc, updateDoc, onSnapshot, Timestamp, serverTimestamp
+  getFirestore, collection, doc, addDoc, setDoc, updateDoc, onSnapshot, Timestamp, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
@@ -52,6 +52,16 @@ const installNotes = document.getElementById("installNotes");
 const btnSaveInstall = document.getElementById("btnSaveInstall");
 const btnCancelInstall = document.getElementById("btnCancelInstall");
 const installModalError = document.getElementById("installModalError");
+
+const convertModal = document.getElementById("convertModal");
+const convertInstallLabel = document.getElementById("convertInstallLabel");
+const convertEmail = document.getElementById("convertEmail");
+const convertDueDate = document.getElementById("convertDueDate");
+const convertAmount = document.getElementById("convertAmount");
+const btnSaveConvert = document.getElementById("btnSaveConvert");
+const btnCancelConvert = document.getElementById("btnCancelConvert");
+const convertModalError = document.getElementById("convertModalError");
+let convertingInstallId = null;
 
 const repairModal = document.getElementById("repairModal");
 const repairEmail = document.getElementById("repairEmail");
@@ -241,7 +251,11 @@ function buildCard(item, { showActions = true, showTypeTag = false } = {}) {
         <button class="btn btn-primary btn-sm" data-action="schedule">${item.status === "scheduled" ? "Reschedule" : "Schedule"}</button>
       </div>
       <div class="repair-schedule-row">
-        ${item.status === "scheduled" ? '<button class="btn btn-ghost btn-sm" data-action="complete">Mark Completed</button>' : ""}
+        ${item.status === "scheduled" ? (
+          item.type === "install"
+            ? '<button class="btn btn-ghost btn-sm" data-action="convert">Complete &amp; Add as Subscriber</button>'
+            : '<button class="btn btn-ghost btn-sm" data-action="complete">Mark Completed</button>'
+        ) : ""}
         <button class="btn btn-danger btn-sm" data-action="cancel">Cancel</button>
       </div>
     </div>` : ""}
@@ -255,6 +269,8 @@ function buildCard(item, { showActions = true, showTypeTag = false } = {}) {
     });
     const completeBtn = card.querySelector('[data-action="complete"]');
     if (completeBtn) completeBtn.addEventListener("click", () => setItemStatus(item.type, item.id, "completed"));
+    const convertBtn = card.querySelector('[data-action="convert"]');
+    if (convertBtn) convertBtn.addEventListener("click", () => openConvertModal(item));
     card.querySelector('[data-action="cancel"]').addEventListener("click", () => {
       if (!confirm("Cancel this request?")) return;
       setItemStatus(item.type, item.id, "cancelled");
@@ -349,6 +365,57 @@ function renderHistoryTab() {
   history.forEach((item) => historyList.appendChild(buildCard(item, { showActions: false, showTypeTag: true })));
 }
 historySearchBox.addEventListener("input", renderHistoryTab);
+
+// ---------- Convert completed install → active subscriber ----------
+function openConvertModal(item) {
+  convertingInstallId = item.id;
+  convertInstallLabel.textContent = `${item.name || item.contact || ""} — ${item.address || ""}`;
+  // If the contact they gave looks like an email, prefill it; otherwise leave
+  // blank so the admin types in the real email the subscriber will log in with.
+  convertEmail.value = (item.contact && item.contact.includes("@")) ? item.contact.trim().toLowerCase() : "";
+  convertDueDate.value = "";
+  convertAmount.value = "";
+  convertModalError.hidden = true;
+  convertModal.hidden = false;
+}
+btnCancelConvert.addEventListener("click", () => { convertModal.hidden = true; convertingInstallId = null; });
+
+btnSaveConvert.addEventListener("click", async () => {
+  const email = convertEmail.value.trim().toLowerCase();
+  const dueDateStr = convertDueDate.value;
+  const amount = parseFloat(convertAmount.value);
+
+  if (!email) { convertModalError.textContent = "Subscriber email is required."; convertModalError.hidden = false; return; }
+  if (!dueDateStr) { convertModalError.textContent = "Due date is required."; convertModalError.hidden = false; return; }
+
+  const installItem = allInstalls.find((i) => i.id === convertingInstallId);
+  if (!installItem) { convertModalError.textContent = "Couldn't find this install request anymore."; convertModalError.hidden = false; return; }
+
+  btnSaveConvert.disabled = true;
+  try {
+    // 1) Create the subscriber record (same shape as the main dashboard's Add subscriber).
+    await setDoc(doc(db, "subscribers", email), {
+      name: installItem.name || "",
+      email,
+      dueDate: Timestamp.fromDate(new Date(dueDateStr + "T09:00:00")),
+      monthlyAmount: isNaN(amount) ? 0 : amount,
+      status: "active"
+    });
+    // 2) Mark the install request completed and remember who it became.
+    await updateDoc(doc(db, "installRequests", convertingInstallId), {
+      status: "completed",
+      convertedToEmail: email
+    });
+    convertModal.hidden = true;
+    convertingInstallId = null;
+    showToast("Naging active subscriber na si " + email + ".");
+  } catch (err) {
+    convertModalError.textContent = "Failed to save: " + err.message;
+    convertModalError.hidden = false;
+  } finally {
+    btnSaveConvert.disabled = false;
+  }
+});
 
 // ---------- Add install modal ----------
 btnAddInstall.addEventListener("click", () => {
