@@ -156,6 +156,31 @@
   </div>
 </div>
 
+<!-- CONVERT INSTALL TO SUBSCRIBER MODAL -->
+<div id="convertModal" class="modal-overlay" hidden>
+  <div class="modal">
+    <h2>Complete install — add as subscriber</h2>
+    <p class="section-sub" id="convertInstallLabel"></p>
+    <label>Subscriber email <span class="hint">(this becomes their login + document ID — lowercase)</span>
+      <input type="email" id="convertEmail" />
+    </label>
+    <label>Due date
+      <input type="date" id="convertDueDate" />
+    </label>
+    <label>Monthly amount (₱)
+      <input type="number" id="convertAmount" min="0" step="0.01" />
+    </label>
+    <div class="modal-actions">
+      <div></div>
+      <div class="modal-actions-right">
+        <button id="btnCancelConvert" class="btn btn-ghost">Cancel</button>
+        <button id="btnSaveConvert" class="btn btn-primary">Complete &amp; add subscriber</button>
+      </div>
+    </div>
+    <p id="convertModalError" class="error-text" hidden></p>
+  </div>
+</div>
+
 <!-- ADD REPAIR MODAL -->
 <div id="repairModal" class="modal-overlay" hidden>
   <div class="modal">
